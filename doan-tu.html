@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đoán Từ</title>
+<style>
+  :root {
+    --bg: #fdf6e3;
+    --ink: #1f2a44;
+    --muted: #6b7489;
+    --card: #ffffff;
+    --line: #e3dcc8;
+    --accent: #2f6fed;
+    --good: #1f9d55;
+    --bad: #d93025;
+    --tile: #1f2a44;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", "Be Vietnam Pro", Roboto, Arial, sans-serif;
+    font-size: 20px;
+    line-height: 1.4;
+  }
+  .screen { display: none; min-height: 100%; padding: 28px 4vw 40px; }
+  .screen.active { display: flex; flex-direction: column; }
+  h1 { font-size: 44px; margin: 0 0 6px; letter-spacing: 1px; }
+  h2 { font-size: 30px; margin: 0 0 18px; }
+  p.sub { margin: 0 0 22px; color: var(--muted); }
+  button {
+    font: inherit; font-weight: 700; cursor: pointer;
+    border: 0; border-radius: 12px; padding: 14px 26px;
+    background: var(--accent); color: #fff;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+  button.ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  button.big { font-size: 26px; padding: 18px 44px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .spacer { flex: 1; }
+  .error { color: var(--bad); font-weight: 700; min-height: 1.4em; margin: 10px 0; }
+
+  /* Thiết lập */
+  .setup-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+  @media (max-width: 800px) { .setup-grid { grid-template-columns: 1fr; } }
+  label { display: block; font-weight: 700; margin-bottom: 8px; }
+  label small { font-weight: 400; color: var(--muted); }
+  textarea {
+    width: 100%; height: 46vh; min-height: 220px; resize: vertical;
+    font: inherit; padding: 14px; border-radius: 12px;
+    border: 2px solid var(--line); background: var(--card); color: var(--ink);
+  }
+  textarea:focus, input:focus { outline: 3px solid #b9cffb; border-color: var(--accent); }
+
+  /* Chọn cấp độ */
+  .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 10px 0 26px; }
+  @media (max-width: 800px) { .levels { grid-template-columns: 1fr; } }
+  .level {
+    background: var(--card); color: var(--ink); text-align: left;
+    border: 3px solid var(--line); border-radius: 18px; padding: 26px;
+    font-weight: 400;
+  }
+  .level:hover { border-color: var(--lv); filter: none; transform: translateY(-3px); }
+  .level b { display: block; font-size: 34px; color: var(--lv); }
+  .level .num { font-size: 16px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
+  .level .shown { font-size: 22px; margin: 10px 0; font-weight: 700; }
+  .level .times { color: var(--muted); }
+
+  /* Chơi */
+  .topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+  .badge { padding: 6px 16px; border-radius: 999px; color: #fff; font-weight: 700; background: var(--lv, var(--accent)); }
+  .round { font-size: 28px; font-weight: 800; }
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+  .timer { position: relative; width: 170px; height: 170px; }
+  .timer svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .timer circle { fill: none; stroke-width: 10; }
+  .timer .track { stroke: var(--line); }
+  .timer .bar { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 339.292; }
+  .timer .num {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 64px; font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .timer.low .bar { stroke: var(--bad); }
+  .timer.low .num { color: var(--bad); }
+
+  .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.2vw 3vw; }
+  .syll { display: flex; gap: .6vw; }
+  .tile {
+    --w: min(7.5vw, calc(84vw / var(--n)), 110px);
+    width: var(--w); height: calc(var(--w) * 1.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: calc(var(--w) * .68); font-weight: 800;
+    border-radius: 10px; background: var(--card);
+    border: 3px solid var(--tile); border-bottom-width: 7px;
+    color: var(--tile);
+  }
+  .tile.hint { background: var(--tile); color: #fff; }
+  .tile.opened { background: #e6f6ec; border-color: var(--good); color: var(--good); }
+  .tile.missed { background: #fdeceb; border-color: var(--bad); color: var(--bad); }
+
+  .msg { font-size: 28px; font-weight: 800; min-height: 1.4em; text-align: center; }
+  .msg.good { color: var(--good); }
+  .msg.bad { color: var(--bad); }
+
+  input.tile {
+    font-family: inherit; padding: 0; text-align: center; text-transform: uppercase;
+    background: #fff8d6; border-color: var(--accent); caret-color: var(--accent);
+  }
+  input.tile:focus { outline: 4px solid #b9cffb; }
+  .tiles.shake { animation: shake .35s; }
+  .tiles.shake input.tile { border-color: var(--bad); color: var(--bad); }
+  @keyframes shake {
+    25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-5px); }
+  }
+
+  .groups { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 18px; }
+  .group {
+    background: var(--g); min-width: 170px; padding: 14px 22px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 22px;
+  }
+  .group .pts { font-size: 34px; font-weight: 800; line-height: 1; }
+  .group.winner { outline: 6px solid #ffd54a; }
+  .hintline { text-align: center; color: var(--muted); font-size: 17px; margin-top: 10px; min-height: 1.4em; }
+
+  /* Kết quả */
+  .total {
+    background: var(--ink); color: #fff; border-radius: 18px; padding: 22px 30px;
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .total .val { font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .results-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; margin-bottom: 26px; }
+  @media (max-width: 900px) { .results-grid { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 14px; overflow: hidden; }
+  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { background: #f3ecd8; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+  tr:last-child td { border-bottom: 0; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  th.n { text-align: right; }
+  .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; background: var(--g); }
+  .none { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- Thiết lập -->
+<section class="screen active" id="setup">
+  <h1>ĐOÁN TỪ</h1>
+  <p class="sub">Giáo viên nhập danh sách từ và tên các nhóm trước khi bắt đầu.</p>
+  <div class="setup-grid">
+    <div>
+      <label for="wordsInput">Danh sách từ <small>(mỗi dòng một từ hoặc cụm từ, ít nhất 5 từ)</small></label>
+      <textarea id="wordsInput" spellcheck="false"></textarea>
+    </div>
+    <div>
+      <label for="groupsInput">Các nhóm <small>(mỗi dòng một nhóm, ít nhất 2 nhóm)</small></label>
+      <textarea id="groupsInput" spellcheck="false"></textarea>
+    </div>
+  </div>
+  <div class="error" id="setupError"></div>
+  <div class="row">
+    <button class="big" id="saveBtn">Lưu và tiếp tục</button>
+    <span class="sub" id="wordCount" style="margin:0"></span>
+  </div>
+</section>
+
+<!-- Chọn cấp độ -->
+<section class="screen" id="levels">
+  <h1>ĐOÁN TỪ</h1>
+  <p class="sub">Chọn cấp độ. Mỗi trò chơi gồm 5 lượt, thời gian giảm dần sau mỗi lượt.</p>
+  <div class="levels" id="levelCards"></div>
+  <div class="row">
+    <button class="ghost" id="toSetupBtn">Sửa danh sách từ</button>
+    <button class="ghost" id="resetScoreBtn">Đặt lại điểm</button>
+    <span class="sub" id="scoreSummary" style="margin:0"></span>
+  </div>
+</section>
+
+<!-- Chơi -->
+<section class="screen" id="play">
+  <div class="topbar">
+    <span class="badge" id="levelBadge"></span>
+    <span class="round" id="roundLabel"></span>
+    <span class="spacer"></span>
+    <button class="ghost" id="muteBtn"></button>
+    <button class="ghost" id="quitBtn">Thoát</button>
+  </div>
+  <div class="stage">
+    <div class="timer" id="timer">
+      <svg viewBox="0 0 120 120">
+        <circle class="track" cx="60" cy="60" r="54"></circle>
+        <circle class="bar" id="timerBar" cx="60" cy="60" r="54"></circle>
+      </svg>
+      <div class="num" id="timerNum"></div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="msg" id="msg"></div>
+    <div class="row">
+      <button class="big" id="startBtn">Bắt đầu</button>
+      <button class="big" id="nextBtn"></button>
+      <button class="ghost" id="noPointBtn">Không tính điểm</button>
+    </div>
+  </div>
+  <div class="groups" id="groupBtns"></div>
+  <div class="hintline" id="hintline"></div>
+</section>
+
+<!-- Kết quả -->
+<section class="screen" id="results">
+  <h1>KẾT QUẢ</h1>
+  <p class="sub" id="resultsSub"></p>
+  <div class="total">
+    <span>Tổng thời gian 5 lượt</span>
+    <span class="val" id="totalTime"></span>
+    <span class="spacer"></span>
+    <span id="totalCorrect"></span>
+  </div>
+  <div class="results-grid">
+    <table>
+      <thead><tr><th>Lượt</th><th>Từ</th><th class="n">Thời gian</th><th>Nhóm thắng</th></tr></thead>
+      <tbody id="roundRows"></tbody>
+    </table>
+    <table>
+      <thead><tr><th>Hạng</th><th>Nhóm</th><th class="n">Trò này</th><th class="n">Tổng điểm</th></tr></thead>
+      <tbody id="rankRows"></tbody>
+    </table>
+  </div>
+  <div class="row">
+    <button class="big" id="againBtn">Chơi lại</button>
+    <button class="ghost" id="changeLevelBtn">Đổi cấp độ</button>
+    <button class="ghost" id="backSetupBtn">Sửa danh sách từ</button>
+  </div>
+</section>
+
+<script>
+const LEVELS = [
+  { name: 'Dễ',  show: 3, times: [60, 50, 40, 30, 20], color: '#1f9d55' },
+  { name: 'Vừa', show: 2, times: [50, 40, 30, 20, 10], color: '#e08a00' },
+  { name: 'Khó', show: 1, times: [40, 30, 20, 10, 5],  color: '#d93025' },
+];
+const ROUNDS = 5;
+const GROUP_COLORS = ['#2f6fed', '#d93025', '#1f9d55', '#8e44ad', '#e08a00', '#0097a7', '#c2185b', '#5d4037'];
+const SAMPLE_WORDS = ['trường học', 'giáo viên', 'học sinh', 'quyển sách', 'bạn bè', 'gia đình',
+  'hoà bình', 'mùa xuân', 'con mèo', 'bầu trời', 'dòng sông', 'thành phố'];
+const SAMPLE_GROUPS = ['Nhóm 1', 'Nhóm 2', 'Nhóm 3', 'Nhóm 4'];
+const RING = 339.292;
+const TONES = /[̣̀́̃̉]/;
+
+const state = {
+  words: [], groups: [], scores: [], gameScores: [],
+  level: 0, round: 0, queue: [], results: [], used: new Set(),
+  word: '', mask: [], phase: 'ready', limit: 0, startAt: 0, elapsed: 0,
+  raf: 0, lastBeep: -1, muted: false, audio: null,
+};
+
+const $ = id => document.getElementById(id);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function save(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  window.scrollTo(0, 0);
+}
+
+/* ---------- Xử lý tiếng Việt ---------- */
+function cleanLine(s) { return s.normalize('NFC').trim().replace(/\s+/g, ' '); }
+function upper(s) { return s.toLocaleUpperCase('vi'); }
+
+// So sánh không phân biệt hoa/thường, khoảng trắng thừa và vị trí đặt dấu thanh (hoà = hòa)
+function normalizeAnswer(text) {
+  return cleanLine(text).toLocaleLowerCase('vi').split(' ').map(syl => {
+    const d = syl.normalize('NFD');
+    const tone = (d.match(TONES) || [''])[0];
+    return d.replace(new RegExp(TONES.source, 'g'), '').normalize('NFC') + tone;
+  }).join(' ');
+}
+
+// Bỏ hết dấu để chấp nhận câu trả lời gõ không dấu (trường = truong, đ = d)
+function stripMarks(text) {
+  return cleanLine(text).toLocaleLowerCase('vi').normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
+}
+
+function parseLines(text) {
+  const seen = new Set(), out = [];
+  text.split(/\r?\n/).forEach(line => {
+    const w = cleanLine(line);
+    const key = normalizeAnswer(w);
+    if (w && !seen.has(key)) { seen.add(key); out.push(w); }
+  });
+  return out;
+}
+
+/* ---------- Chọn từ và tạo gợi ý ---------- */
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickWords() {
+  let picked = shuffle(state.words.filter(w => !state.used.has(w))).slice(0, ROUNDS);
+  if (picked.length < ROUNDS) {
+    state.used.clear();
+    const rest = shuffle(state.words.filter(w => !picked.includes(w)));
+    picked = picked.concat(rest.slice(0, ROUNDS - picked.length));
+  }
+  picked.forEach(w => state.used.add(w));
+  return picked;
+}
+
+// Trả về mảng true/false cho từng ký tự: true = hiện sẵn
+function makeMask(chars, n) {
+  const letters = [];
+  chars.forEach((c, i) => { if (c !== ' ') letters.push(i); });
+  const count = Math.max(0, Math.min(n, letters.length - 1));
+  const shown = new Set(shuffle(letters).slice(0, count));
+  return chars.map((c, i) => shown.has(i));
+}
+
+/* ---------- Thiết lập ---------- */
+function initSetup() {
+  $('wordsInput').value = load('doantu.words') || SAMPLE_WORDS.join('\n');
+  $('groupsInput').value = load('doantu.groups') || SAMPLE_GROUPS.join('\n');
+  updateWordCount();
+}
+function updateWordCount() {
+  $('wordCount').textContent = parseLines($('wordsInput').value).length + ' từ';
+}
+function saveSetup() {
+  const words = parseLines($('wordsInput').value);
+  const groups = parseLines($('groupsInput').value);
+  if (words.length < ROUNDS) { $('setupError').textContent = 'Cần ít nhất 5 từ khác nhau.'; return; }
+  if (groups.length < 2) { $('setupError').textContent = 'Cần ít nhất 2 nhóm.'; return; }
+  $('setupError').textContent = '';
+  save('doantu.words', words.join('\n'));
+  save('doantu.groups', groups.join('\n'));
+  const sameGroups = groups.join('\n') === state.groups.join('\n');
+  state.words = words;
+  state.groups = groups;
+  if (!sameGroups) state.scores = groups.map(() => 0);
+  state.used.clear();
+  showLevels();
+}
+
+/* ---------- Chọn cấp độ ---------- */
+function showLevels() {
+  const box = $('levelCards');
+  box.textContent = '';
+  LEVELS.forEach((lv, i) => {
+    const b = el('button', 'level');
+    b.style.setProperty('--lv', lv.color);
+    b.append(
+      el('span', 'num', 'Cấp độ ' + (i + 1)),
+      el('b', '', lv.name),
+      el('div', 'shown', 'Hiện ' + lv.show + ' chữ cái'),
+      el('div', 'times', 'Thời gian: ' + lv.times.join(' → ') + ' giây')
+    );
+    b.onclick = () => startGame(i);
+    box.append(b);
+  });
+  $('scoreSummary').textContent = 'Tổng điểm: ' +
+    state.groups.map((g, i) => g + ' ' + state.scores[i]).join(' · ');
+  show('levels');
+}
+
+/* ---------- Chơi ---------- */
+function startGame(level) {
+  state.level = level;
+  state.round = 0;
+  state.queue = pickWords();
+  state.results = [];
+  state.gameScores = state.groups.map(() => 0);
+  const lv = LEVELS[level];
+  $('levelBadge').textContent = 'Cấp độ ' + (level + 1) + ' · ' + lv.name;
+  $('levelBadge').style.setProperty('--lv', lv.color);
+  show('play');
+  setupRound();
+}
+
+function setupRound() {
+  const lv = LEVELS[state.level];
+  state.word = upper(cleanLine(state.queue[state.round]));
+  const chars = Array.from(state.word);
+  state.mask = makeMask(chars, lv.show);
+  state.limit = lv.times[state.round];
+  state.elapsed = 0;
+  state.lastBeep = -1;
+  state.winner = null;
+  $('roundLabel').textContent = 'Lượt ' + (state.round + 1) + '/' + ROUNDS;
+  setPhase('ready');
+  drawTimer(state.limit);
+}
+
+function setPhase(phase) {
+  state.phase = phase;
+  const running = phase === 'running', pick = phase === 'pick', done = phase === 'done';
+  $('startBtn').hidden = phase !== 'ready';
+  $('nextBtn').hidden = !done;
+  $('nextBtn').textContent = state.round === ROUNDS - 1 ? 'Xem kết quả' : 'Lượt tiếp theo';
+  $('noPointBtn').hidden = !pick;
+  const msg = $('msg');
+  msg.className = 'msg';
+  if (phase === 'ready') msg.textContent = 'Sẵn sàng? ' + state.limit + ' giây';
+  if (running) msg.textContent = '';
+  if (pick) { msg.textContent = 'Chính xác! Nhóm nào trả lời đúng?'; msg.classList.add('good'); }
+  $('hintline').textContent =
+    running ? 'Bấm vào nhóm trả lời đúng đầu tiên, hoặc gõ chữ cái vào các ô trống.' :
+    pick ? 'Bấm vào nhóm được cộng điểm.' : '';
+  renderTiles();
+  renderGroups();
+  if (running && blanks()[0]) blanks()[0].focus();
+}
+
+function renderTiles() {
+  const box = $('tiles');
+  box.textContent = '';
+  const chars = Array.from(state.word);
+  const phase = state.phase;
+  const revealAll = phase === 'pick' || phase === 'done';
+  const solved = revealAll && !state.timedOut;
+  box.style.setProperty('--n', Math.max(chars.length, 6));
+  let syll = el('div', 'syll');
+  chars.forEach((c, i) => {
+    if (c === ' ') { box.append(syll); syll = el('div', 'syll'); return; }
+    let t = el('div', 'tile');
+    if (phase === 'running' && !state.mask[i]) {
+      t = el('input', 'tile');
+      t.type = 'text'; t.autocomplete = 'off'; t.spellcheck = false;
+      t.setAttribute('autocapitalize', 'characters');
+      t.setAttribute('aria-label', 'Chữ cái');
+    } else if (phase === 'ready') {
+      t.textContent = '';
+    } else if (state.mask[i]) {
+      t.textContent = c; t.classList.add('hint');
+    } else if (revealAll) {
+      t.textContent = c; t.classList.add(solved ? 'opened' : 'missed');
+    }
+    syll.append(t);
+  });
+  box.append(syll);
+}
+
+function renderGroups() {
+  const box = $('groupBtns');
+  box.textContent = '';
+  const canPick = state.phase === 'running' || state.phase === 'pick';
+  state.groups.forEach((g, i) => {
+    const b = el('button', 'group');
+    b.style.setProperty('--g', GROUP_COLORS[i % GROUP_COLORS.length]);
+    b.append(el('span', '', g), el('span', 'pts', String(state.scores[i])));
+    b.disabled = !canPick;
+    if (state.phase === 'done' && state.winner === i) { b.classList.add('winner'); b.disabled = false; }
+    b.onclick = () => { if (state.phase === 'running' || state.phase === 'pick') award(i); };
+    box.append(b);
+  });
+}
+
+function drawTimer(remaining) {
+  const frac = Math.max(0, remaining / state.limit);
+  $('timerBar').style.strokeDashoffset = RING * (1 - frac);
+  $('timerNum').textContent = Math.ceil(Math.max(0, remaining));
+  $('timer').classList.toggle('low', state.phase === 'running' && remaining <= 5);
+}
+
+function startRound() {
+  if (!state.audio && !state.muted) {
+    try { state.audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  state.timedOut = false;
+  state.startAt = performance.now();
+  setPhase('running');
+  clearInterval(state.raf);
+  state.raf = setInterval(tick, 50);
+}
+
+function tick() {
+  if (state.phase !== 'running') return;
+  const elapsed = (performance.now() - state.startAt) / 1000;
+  const remaining = state.limit - elapsed;
+  if (remaining <= 0) { timeUp(); return; }
+  drawTimer(remaining);
+  const sec = Math.ceil(remaining);
+  if (sec <= 5 && sec !== state.lastBeep) { state.lastBeep = sec; beep(880, .08); }
+}
+
+function stopClock(at) {
+  clearInterval(state.raf);
+  const elapsed = ((at || performance.now()) - state.startAt) / 1000;
+  state.elapsed = Math.min(state.limit, Math.round(elapsed * 10) / 10);
+}
+
+function timeUp() {
+  clearInterval(state.raf);
+  state.elapsed = state.limit;
+  state.timedOut = true;
+  beep(220, .5);
+  finishRound(null);
+  drawTimer(0);
+  $('msg').textContent = 'Hết giờ! Đáp án - Trả lời là: ' + state.word;
+  $('msg').classList.add('bad');
+}
+
+/* ---------- Gõ chữ cái vào ô trống ---------- */
+function blanks() { return Array.from(document.querySelectorAll('#tiles input')); }
+
+// Mỗi ô giữ một chữ cái; chữ thừa (bộ gõ, dán) được chuyển sang các ô trống kế tiếp
+function fillFrom(box) {
+  const list = blanks(), i = list.indexOf(box);
+  const chars = Array.from(box.value.normalize('NFC').replace(/\s/g, ''));
+  if (!chars.length) { box.value = ''; return; }
+  chars.forEach((c, k) => { if (list[i + k]) list[i + k].value = c; });
+  const next = list[i + chars.length];
+  if (next) next.focus();
+  else { const last = list[list.length - 1]; last.focus(); last.setSelectionRange(1, 1); }
+  state.lastInputAt = performance.now();
+  // Chờ một chút để bộ gõ tiếng Việt kịp bỏ dấu trước khi kiểm tra
+  clearTimeout(state.checkTimer);
+  state.checkTimer = setTimeout(checkBoxes, 350);
+}
+
+function checkBoxes() {
+  clearTimeout(state.checkTimer);
+  if (state.phase !== 'running') return;
+  const list = blanks();
+  if (list.some(b => !b.value)) return;
+  let k = 0;
+  const typed = Array.from(state.word).map((c, i) => c === ' ' || state.mask[i] ? c : list[k++].value).join('');
+  if (stripMarks(typed) === stripMarks(state.word)) {
+    stopClock(state.lastInputAt);
+    beep(1320, .2);
+    setPhase('pick');
+  } else {
+    const box = $('tiles');
+    box.classList.remove('shake');
+    void box.offsetWidth;
+    box.classList.add('shake');
+  }
+}
+
+function onTileKey(e) {
+  const box = e.target;
+  if (box.tagName !== 'INPUT' || e.isComposing) return;
+  const list = blanks(), i = list.indexOf(box);
+  if (e.key === 'Backspace' && box.value === '' && i > 0) {
+    // Bộ gõ (Unikey) xoá lùi rồi gõ lại chữ có dấu: lùi về ô trước và xoá ô đó
+    e.preventDefault();
+    list[i - 1].value = '';
+    list[i - 1].focus();
+  } else if (e.key === 'ArrowLeft' && i > 0) {
+    e.preventDefault(); list[i - 1].focus();
+  } else if (e.key === 'ArrowRight' && i < list.length - 1) {
+    e.preventDefault(); list[i + 1].focus();
+  } else if (e.key === ' ') {
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    checkBoxes();
+  }
+}
+
+function award(i) {
+  if (state.phase === 'running') { stopClock(); beep(1320, .2); }
+  state.scores[i]++;
+  state.gameScores[i]++;
+  finishRound(i);
+  $('msg').textContent = state.groups[i] + ' trả lời đúng sau ' + fmt(state.elapsed);
+  $('msg').classList.add('good');
+}
+
+function finishRound(winner) {
+  state.winner = winner;
+  state.results.push({ word: state.word, used: state.elapsed, winner: winner, solved: !state.timedOut });
+  setPhase('done');
+}
+
+function nextRound() {
+  if (state.round === ROUNDS - 1) { renderResults(); return; }
+  state.round++;
+  state.timedOut = false;
+  setupRound();
+}
+
+function beep(freq, dur) {
+  if (state.muted || !state.audio) return;
+  try {
+    const ctx = state.audio, o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + dur);
+  } catch (e) {}
+}
+
+function fmt(sec) { return sec.toFixed(1).replace('.', ',') + ' giây'; }
+
+/* ---------- Kết quả ---------- */
+function renderResults() {
+  const lv = LEVELS[state.level];
+  $('resultsSub').textContent = 'Cấp độ ' + (state.level + 1) + ' · ' + lv.name;
+  const total = state.results.reduce((s, r) => s + Math.round(r.used * 10), 0) / 10;
+  $('totalTime').textContent = fmt(total);
+  $('totalCorrect').textContent = 'Đoán đúng ' + state.results.filter(r => r.solved).length + '/' + ROUNDS + ' từ';
+
+  const rows = $('roundRows');
+  rows.textContent = '';
+  state.results.forEach((r, i) => {
+    const tr = el('tr');
+    const who = el('td');
+    if (r.winner != null) {
+      const dot = el('span', 'dot');
+      dot.style.setProperty('--g', GROUP_COLORS[r.winner % GROUP_COLORS.length]);
+      who.append(dot, state.groups[r.winner]);
+    } else {
+      who.className = 'none';
+      who.textContent = r.solved ? 'Không tính điểm' : 'Hết giờ';
+    }
+    tr.append(el('td', '', String(i + 1)), el('td', '', r.word), el('td', 'n', fmt(r.used)), who);
+    rows.append(tr);
+  });
+
+  const order = state.groups.map((g, i) => i)
+    .sort((a, b) => state.gameScores[b] - state.gameScores[a] || state.scores[b] - state.scores[a]);
+  const rank = $('rankRows');
+  rank.textContent = '';
+  let place = 0, prev = null;
+  order.forEach((gi, idx) => {
+    if (state.gameScores[gi] !== prev) { place = idx + 1; prev = state.gameScores[gi]; }
+    const tr = el('tr');
+    const name = el('td');
+    const dot = el('span', 'dot');
+    dot.style.setProperty('--g', GROUP_COLORS[gi % GROUP_COLORS.length]);
+    name.append(dot, state.groups[gi]);
+    tr.append(el('td', '', String(place)), name,
+      el('td', 'n', String(state.gameScores[gi])), el('td', 'n', String(state.scores[gi])));
+    rank.append(tr);
+  });
+  show('results');
+}
+
+/* ---------- Sự kiện ---------- */
+function setMuteLabel() { $('muteBtn').textContent = state.muted ? 'Âm thanh: Tắt' : 'Âm thanh: Bật'; }
+
+$('wordsInput').addEventListener('input', updateWordCount);
+$('tiles').addEventListener('keydown', onTileKey);
+$('tiles').addEventListener('input', e => { if (!e.isComposing) fillFrom(e.target); });
+$('tiles').addEventListener('compositionend', e => fillFrom(e.target));
+$('tiles').addEventListener('focusin', e => { if (e.target.select) e.target.select(); });
+// Giữ nguyên vùng chọn khi bấm chuột vào ô đã có chữ, để chữ gõ mới thay thế chữ cũ
+$('tiles').addEventListener('mouseup', e => { if (e.target.select) e.preventDefault(); });
+$('tiles').addEventListener('animationend', () => $('tiles').classList.remove('shake'));
+$('saveBtn').onclick = saveSetup;
+$('toSetupBtn').onclick = () => show('setup');
+$('backSetupBtn').onclick = () => show('setup');
+$('resetScoreBtn').onclick = () => { state.scores = state.groups.map(() => 0); showLevels(); };
+$('startBtn').onclick = startRound;
+$('nextBtn').onclick = nextRound;
+$('noPointBtn').onclick = () => {
+  finishRound(null);
+  $('msg').textContent = 'Chính xác! Trả lời sau ' + fmt(state.elapsed);
+  $('msg').classList.add('good');
+};
+$('quitBtn').onclick = () => { clearInterval(state.raf); state.phase = 'ready'; showLevels(); };
+$('muteBtn').onclick = () => { state.muted = !state.muted; setMuteLabel(); };
+$('againBtn').onclick = () => startGame(state.level);
+$('changeLevelBtn').onclick = showLevels;
+
+setMuteLabel();
+initSetup();
+</script>
+</body>
+</html>
